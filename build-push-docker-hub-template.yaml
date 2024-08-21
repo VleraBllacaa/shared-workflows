@@ -1,0 +1,65 @@
+name: build-push-docker-hub-template
+
+# Specifies that this workflow can be called by other workflows
+on:
+  workflow_call:
+    inputs:
+      # Defines an input parameter for the path to the directory containing the Dockerfile
+      working_directory:
+        description: 'Path to the directory containing the Dockerfile'
+        required: true
+        type: string
+      # Defines an input parameter for the Docker image tag
+      image_repository:
+        description: 'Repository for the Docker image'
+        required: true
+        type: string
+      image_tag:
+        description: 'Tag for the Docker image'
+        required: true
+        type: string
+    secrets:
+      DOCKER_HUB_USERNAME:
+        required: true
+      DOCKER_HUB_PAT:
+        required: true
+    outputs:
+      # Defines an output for the reusable workflow, mapping it to a job's output
+      build_docker_image_output:
+        description: 'Output from the build-push-docker-hub-template workflow'
+        value: ${{ jobs.build-push-image.outputs.job_output }}
+
+# Defines the jobs within this workflow
+jobs:
+  # Name of the job responsible for building the Docker image
+  build-push-image:
+    runs-on: ubuntu-latest  # Specifies the type of runner on which the job will run
+
+    # Defines the outputs for this job, mapping it to a specific step's output
+    outputs:
+      build_docker_image_output: ${{ steps.build-docker-image.outputs.step_output }}
+
+    # List of steps to execute in this job
+    steps:
+    # Step to check out the code from the repository
+    - uses: actions/checkout@v2
+
+    # Step to set up Docker Buildx, a tool used for building Docker images
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    # Step to log in to Docker Hub
+    - name: login-docker-hub
+      uses: docker/login-action@v3  # Uses the 'docker/login-action' to authenticate with Docker Hub
+      with:
+        username: ${{ secrets.DOCKER_HUB_USERNAME }}  # Docker Hub username stored in GitHub Secrets
+        password: ${{ secrets.DOCKER_HUB_PAT }}  # Docker Hub Personal Access Token (PAT) stored in GitHub Secrets
+
+    # Step to build the Docker image
+    - name: build-docker-image
+      run: docker build -t ${{ inputs.image_repository }}:${{ inputs.image_tag }} .  # Builds the Docker image using the provided tag
+      working-directory: ${{ inputs.working_directory }}  # Specifies the working directory for the Docker build
+
+    # Step to push the Docker image to Docker Hub
+    - name: push-docker-image
+      run: docker push ${{ inputs.image_repository }}:${{ inputs.image_tag }}  # Pushes the tagged Docker image to Docker Hub
